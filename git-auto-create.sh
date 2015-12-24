@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# TODO:
+#   1. BUG: get current git branch
+#   2. Check for duplicate tag before creation
+
 init()
 {
     local _tagPrefix=$1
@@ -52,10 +56,13 @@ config()
     echo
 }
 
-init tagPrefix tagDelim
-
-tagIdentifier="$(date +"%y%m%d%H%M%S")"
-fullTag=$tagPrefix$tagDelim$tagIdentifier
-
+if [ -z "$1" ]; then
+    init tagPrefix tagDelim
+    tagIdentifier="$(date +"%y%m%d%H%M%S")"
+    fullTag=$tagPrefix$tagDelim$tagIdentifier
+fi
+userInFullTag=$1
+fullTag=${userInFullTag:-"$fullTag"}
 git tag $fullTag
-echo "TAG: $fullTag is created"
+git push --tags
+echo "TAG: $fullTag is created and pushed remotely"
