@@ -2,7 +2,6 @@
 
 # TODO:
 #   1. BUG: get current git branch
-#   2. Check for duplicate tag before creation
 
 init()
 {
