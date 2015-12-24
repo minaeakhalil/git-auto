@@ -63,6 +63,12 @@ if [ -z "$1" ]; then
 fi
 userInFullTag=$1
 fullTag=${userInFullTag:-"$fullTag"}
-git tag $fullTag
-git push --tags
-echo "TAG: $fullTag is created and pushed remotely"
+
+if git rev-parse $fullTag >/dev/null 2>&1
+then
+    echo "TAG: $fullTag already exists. Please use a different tag"
+else
+    git tag $fullTag
+    git push --tags
+    echo "TAG: $fullTag is created and pushed remotely"
+fi
