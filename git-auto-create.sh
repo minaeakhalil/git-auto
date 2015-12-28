@@ -42,6 +42,7 @@ config()
 
     printf "TAG Prefix for feature branch? "
     read -p "[qa] " tag4Feature
+
     tag4Master=${tag4Master:-stage}
     tag4Develop=${tag4Develop:-qa}
     tag4Release=${tag4Release:-qa}
@@ -51,6 +52,8 @@ config()
     git config gitauto.branch.develop $tag4Develop
     git config gitauto.branch.release $tag4Release
     git config gitauto.branch.feature $tag4Feature
+    git config gitauto.tag.prefix $tag4Develop
+    git config gitauto.tag.delim "-"
     echo "Git Auto is configured"
     echo
 }
