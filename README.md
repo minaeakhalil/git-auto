@@ -1,1 +1,2 @@
-# git-auto
+# GIT-Auto
+_DOCUMENTATION COMING SOON_
