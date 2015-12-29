@@ -63,15 +63,21 @@ if [ -z "$1" ]; then
     tagIdentifier="$(date +"%y$tagDelim%m$tagDelim%d$tagDelim%H$tagDelim%M$tagDelim%S")"
     fullTag=$tagPrefix$tagDelim$tagIdentifier
 fi
-echo $fullTag
 userInFullTag=$1
 fullTag=${userInFullTag:-"$fullTag"}
 
-if git rev-parse $fullTag >/dev/null 2>&1
-then
+if [ ! -z "$(git rev-parse $fullTag >/dev/null 2>&1)" ]; then
     echo "TAG: $fullTag already exists. Please use a different tag"
 else
-    git tag $fullTag
-    git push --tags
-    echo "TAG: $fullTag is created and pushed remotely"
+    curCommitHash="$(git rev-parse --verify HEAD)"
+    commit=${curCommitHash:0:7}
+    tagFound="$(git show-ref --tags -d | grep ^$curCommitHash | sed -e 's,.* refs/tags/,,' -e 's/\^{}//')"
+    if [ ! -z "$tagFound" ]; then
+        echo "Commit ($commit) is already tagged with ($tagFound)"
+        echo "New tag was NOT created"
+    else
+        git tag $fullTag
+        git push --tags
+        echo "New TAG: $fullTag is created for commit ($commit) and pushed remotely"
+    fi
 fi
