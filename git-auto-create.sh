@@ -60,9 +60,10 @@ config()
 
 if [ -z "$1" ]; then
     init tagPrefix tagDelim
-    tagIdentifier="$(date +"%y%m%d%H%M%S")"
+    tagIdentifier="$(date +"%y$tagDelim%m$tagDelim%d$tagDelim%H$tagDelim%M$tagDelim%S")"
     fullTag=$tagPrefix$tagDelim$tagIdentifier
 fi
+echo $fullTag
 userInFullTag=$1
 fullTag=${userInFullTag:-"$fullTag"}
 
