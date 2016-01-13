@@ -21,28 +21,58 @@ config()
 
 init()
 {
-    local $_tagPrefix=$1
+    local _tagPrefix=$1
+    local _deployStatus=$2
+    local fetchStatus=''
+    local pullStatus=''
+    local tagsStatus=''
+    local exitStatus=0
+
     local initTagPrefix="$(git config --get gitauto.deploy.prefix)"
 
-    # git fetch --all
-    # git pull
-    # git pull --tags
+    fetchStatus="$(git fetch --all 2>&1)"
+    exitStatus=$?
+    if [ $exitStatus -eq 0 ]; then
+        pullStatus="$(git pull 2>&1)"
+        exitStatus=$?
+        if [ $exitStatus -eq 0 ]; then
+            tagsStatus="$(git pull --tags 2>&1)"
+            exitStatus=$?
+            if [ $exitStatus -eq 0 ]; then
+                echo "Fetching and Pulling from remote repo DONE"
+            else
+                echo "Err while pulling tags from remote repo"
+                echo $tagsStatus
+                return $exitStatus
+            fi
+        else
+            echo "Err while pulling from remote repo"
+            echo $pullStatus
+            return $exitStatus
+        fi
+    else
+        echo "Err while fetching from remote repo"
+        echo $fetchStatus
+        return $exitStatus
+    fi
 
     if [ -z "$initTagPrefix" ]; then
         config
         initTagPrefix="$(git config --get gitauto.deploy.prefix)"
-        deployStatus="$(git config --get gitauto.deploy.status)"
     fi
 
+    deployStatus="$(git config --get gitauto.deploy.status)"
+
     eval $_tagPrefix="'$initTagPrefix'"
-    echo deployStatus
+    eval $_deployStatus="'$deployStatus'"
+
+    return $exitStatus
 }
 
 addScript()
 {
     git config gitauto.deploy.script-"$2" "$1"
-    echo "Added script will be executed $2 deployment"
-    echo "Actual script: $1"
+    echo "Your script '$1' is added and scheduled to be executed $2 deployment"
 }
 
 list()
@@ -50,14 +80,34 @@ list()
     git tag -l
 }
 
-hault()
+pause()
 {
-    git tag -l
+    local exitStatus=0
+
+    git config gitauto.deploy.status 'pause'
+    exitStatus=$?
+    if [ $exitStatus -eq 0 ]; then
+        echo "Code deployment is now PAUSED"
+    else
+        echo "There were an issue while pausing code deployment, please try again later"
+    fi
+
+    return $exitStatus
 }
 
 resume()
 {
-    git tag -l
+    local exitStatus=0
+
+    git config gitauto.deploy.status 'deploy'
+    exitStatus=$?
+    if [ $exitStatus -eq 0 ]; then
+        echo "Code deployment is now RESUMED"
+    else
+        echo "There were an issue while resuming code deployment, please try again later"
+    fi
+
+    return $exitStatus
 }
 
 execScript()
@@ -72,8 +122,7 @@ execScript()
     if [ $exitStatus -gt 0 ]; then
         retStatus=$exitStatus
     fi
-    # eval _result=\"'$scriptResult'\"
-    # echo $_result
+    eval $_result="'$scriptResult'"
     return $exitStatus
 }
 
@@ -87,11 +136,11 @@ deploy()
 
     if [ ! -z "$scriptBefore" ]; then
         printf "Pre-Deployment Script: "
-        execScript "$result" "before" "$scriptBefore"
+        execScript result "before" "$scriptBefore"
         exitStatus=$?
         if [ $exitStatus -gt 0 ]; then
             retStatus=$exitStatus
-            printf "FAILED with errors\n"
+            printf "FAILED, Err: $result\n"
         else
             printf "SUCCESSED\n"
         fi
@@ -100,10 +149,10 @@ deploy()
     printf "Code Deployment using GIT TAG ($1): "
     if [ $exitStatus -eq 0 ]; then
         deployResult=$(git checkout "TEST$1" 2>&1)
-        codeDeployStatus=$?
-        if [ $codeDeployStatus -gt 0 ]; then
+        exitStatus=$?
+        if [ $exitStatus -gt 0 ]; then
             retStatus=$exitStatus
-            printf " FAILED\n"
+            printf " FAILED, Err: $deployResult\n"
         else
             printf " SUCCESSED\n"
         fi
@@ -112,13 +161,13 @@ deploy()
     fi
 
     if [ ! -z "$scriptAfter" ]; then
+        printf "Post-Deployment Script: "
         if [ $exitStatus -eq 0 ]; then
-            printf "Post-Deployment Script: "
-            execScript "$result" "after" "$scriptAfter"
+            execScript result "after" "$scriptAfter"
             exitStatus=$?
             if [ $exitStatus -gt 0 ]; then
                 retStatus=$exitStatus
-                printf "FAILED with errors\n"
+                printf "FAILED, Err: $result\n"
             else
                 printf "SUCCESSED\n"
             fi
@@ -157,37 +206,52 @@ getLatestTag()
     echo $selectedTag
 }
 
-tagPrefix="qa"
 tagsList=($(git tag -l))
 
-# init $tagPrefix
-if [ ! -z "$1" ]; then
-    if [ "$1" = "d" ] || [ "$1" = "deploy" ]; then
-        deploy "$(getLatestTag $tagPrefix)"
-    elif [ "$1" = "l" ] || [ "$1" = "list" ]; then
-        list
-    elif [ "$1" = "s" ] || [ "$1" = "add-script" ]; then
-        if [ ! -z "$2" ]; then
-            scriptExecTime="after"
-            if [ ! -z "$3" ]; then
-                if [ "$3" = "after" ] || [ "$3" = "before" ]; then
-                    scriptExecTime="$3"
-                else
-                    echo "Invalid arg: $3"
-                    echo "Script exec time should be either 'after' or 'before'"
-                    exit
-                fi
+init tagPrefix deployStatus
+exitStatus=$?
+if [ $exitStatus -eq 0 ]; then
+    if [ ! -z "$1" ]; then
+        if [ "$1" = "d" ] || [ "$1" = "deploy" ]; then
+            if [ $deployStatus = "deploy" ]; then
+                deploy "$(getLatestTag $tagPrefix)"
+            else
+                echo "Code Deployment is current PAUSED"
+                echo "try (git-auto-deploy resume) to resume code deployment"
             fi
-            addScript "$2" $scriptExecTime
+        elif [ "$1" = "p" ] || [ "$1" = "pause" ]; then
+            pause
+        elif [ "$1" = "r" ] || [ "$1" = "resume" ]; then
+            resume
+        elif [ "$1" = "l" ] || [ "$1" = "list" ]; then
+            list
+        elif [ "$1" = "s" ] || [ "$1" = "add-script" ]; then
+            if [ ! -z "$2" ]; then
+                scriptExecTime="after"
+                if [ ! -z "$3" ]; then
+                    if [ "$3" = "after" ] || [ "$3" = "before" ]; then
+                        scriptExecTime="$3"
+                    else
+                        echo "Invalid arg: $3"
+                        echo "Script exec time should be either 'after' or 'before'"
+                        exit
+                    fi
+                fi
+                addScript "$2" $scriptExecTime
+            else
+                echo "No script provided"
+            fi
+        elif [ "$1" = "h" ] || [ "$1" = "help" ]; then
+            listCommands
         else
-            echo "Missing path to the script"
+            echo "Unrecognized command $1 below are the list of commands that can be used"
+            listCommands
         fi
-    elif [ "$1" = "h" ] || [ "$1" = "help" ]; then
-        listCommands
     else
-        echo "Unrecognized command $1 below are the list of commands that can be used"
-        listCommands
+        deploy "$(getLatestTag $tagPrefix)"
     fi
 else
-    deploy "$(getLatestTag $tagPrefix)"
+    echo "Cannot deploy code without pulling from remote repo first"
+    exit $exitStatus
 fi
+exit 0
