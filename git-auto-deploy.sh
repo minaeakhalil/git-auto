@@ -148,7 +148,7 @@ deploy()
 
     printf "Code Deployment using GIT TAG ($1): "
     if [ $exitStatus -eq 0 ]; then
-        deployResult=$(git checkout "TEST$1" 2>&1)
+        deployResult=$(git checkout "$1" 2>&1)
         exitStatus=$?
         if [ $exitStatus -gt 0 ]; then
             retStatus=$exitStatus
